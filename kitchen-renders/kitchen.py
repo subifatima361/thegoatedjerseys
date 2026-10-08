@@ -488,7 +488,7 @@ SHOTS = {
     "05_stove":  ((54, 50, 58), (40, 6, 44), 30, {"wallS", "S"}, 1.25, 0.0, None),
     "06_sink":   ((66, 32, 56), (106, 50, 45), 28, set(), 1.25, 0.0, None),
     "07_cups":   ((44, 30, 56), (28, 75, 56), 28, {"wallN", "N"}, 1.25, 0.0, None),
-    "08_axo":    ((-160, 130, 230), (54, 37, 30), 0, {"ceil", "beam", "floorext"}, 1.5, 0.0, 4.6),
+    "08_axo":    ((-170, 95, 300), (60, 37, 45), 0, {"ceil", "beam", "floorext"}, 1.5, 0.0, 5.4),
 }
 pos, tgt, lens, hide, aspect, shift, oscale = SHOTS[shot]
 cam_d = bpy.data.cameras.new("cam")
@@ -505,7 +505,7 @@ else:
     cam_d.lens = lens
 
 for o in bpy.data.objects:
-    if shot == "08_axo" and o.get("grp") in ("ceil", "beam", "wallS", "ext"):
+    if shot == "08_axo" and o.get("grp") in ("ceil", "beam", "ext"):
         o.hide_render = True
     if o.get("grp") in hide:
         o.visible_camera = False
