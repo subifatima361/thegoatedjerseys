@@ -489,8 +489,19 @@ SHOTS = {
     "06_sink":   ((66, 32, 56), (106, 50, 45), 28, set(), 1.25, 0.0, None),
     "07_cups":   ((44, 30, 56), (28, 75, 56), 28, {"wallN", "N"}, 1.25, 0.0, None),
     "08_axo":    ((-170, 95, 300), (60, 37, 45), 0, {"ceil", "beam", "floorext"}, 1.5, 0.0, 5.4),
+    # true isometric: view direction (1,1,1) from the south-west corner
+    "09_iso":    ((54 - 300, 37 + 300, 45 + 300), (54, 37, 45), 0, {"ceil", "beam", "floorext"}, 1.0, 0.0, 4.4),
 }
 pos, tgt, lens, hide, aspect, shift, oscale = SHOTS[shot]
+if shot == "09_iso":
+    # section-cut look: near (south) wall cut down low, dark poche caps on cut wall tops
+    for o in OBJS:
+        if o.name == "wallS":
+            o.hide_render = True
+    box("wallS_cut", -6, 114, 75, 81, 0, 36, "wall", "cut", 0)
+    box("cap_S", -6, 114, 75, 81, 36, 36.3, "plinth", "cut", 0)
+    box("cap_N", -6, 114, -6, 0, H, H + 0.3, "plinth", "cut", 0)
+    box("cap_E", 108, 114, -6, 75, H, H + 0.3, "plinth", "cut", 0)
 cam_d = bpy.data.cameras.new("cam")
 cam = bpy.data.objects.new("cam", cam_d); coll.objects.link(cam); scene.camera = cam
 cam.location = Vector((pos[0] * S, -pos[1] * S, pos[2] * S))
@@ -505,7 +516,7 @@ else:
     cam_d.lens = lens
 
 for o in bpy.data.objects:
-    if shot == "08_axo" and o.get("grp") in ("ceil", "beam", "ext"):
+    if shot in ("08_axo", "09_iso") and o.get("grp") in ("ceil", "beam", "ext"):
         o.hide_render = True
     if o.get("grp") in hide:
         o.visible_camera = False
