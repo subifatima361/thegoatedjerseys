@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Build the Kids Jerseys Instagram reel from the raw phone clips.
+"""Build the cinematic Kids Jerseys Instagram reel from the raw phone clips.
 
-Usage: python3 build.py <raw_clip_dir> <output.mp4> [--clean]
+Usage: python3 build.py <raw_clip_dir> <output.mp4>
 
 Raw clips are the 20260920_*.mp4 files from the Drive folder (4K, 60fps, portrait).
---clean renders the same cut without any text overlays.
+Look follows kids-apparel campaign films: candid play, warm/matte "summer haze" grade,
+slow motion on emotion and movement, hard cuts, no on-screen text, natural park sound.
 """
 import os
 import subprocess
@@ -12,89 +13,60 @@ import sys
 import tempfile
 
 W, H, FPS = 1080, 1920, 30
-FONT = "/usr/share/fonts/opentype/inter/InterDisplay-Black.otf"
-FONT_SUB = "/usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf"
 
-# (clip, source start s, source duration s, speed, headline, subline)
+# (clip, source start s, source duration s, speed)
+# 0.5 = slow-mo for laughs, hair, jumps, fabric; ~0.8-1.0 keeps rhythm on print/crest shots.
 EDL = [
-    ("182739", 0.20, 1.40, 0.75, "MINI GOATS", "IN THE BUILDING"),
-    ("182440", 0.15, 0.85, 0.50, "", ""),
-    ("182420", 0.30, 1.50, 1.00, "BARÇA", "YAMAL 10"),
-    ("182427", 0.20, 1.20, 1.00, "", ""),
-    ("182700", 0.70, 1.30, 1.00, "BARÇA", "HOME KIT"),
-    ("182649", 0.00, 1.40, 1.00, "PORTUGAL", ""),
-    ("182601", 0.10, 0.80, 1.00, "THEIR NAME.", "THEIR NUMBER."),
-    ("182436", 0.60, 0.90, 1.00, "THEIR NAME.", "THEIR NUMBER."),
-    ("182412", 0.40, 1.80, 1.00, "GERMANY", "AWAY KIT"),
-    ("182903", 0.00, 1.00, 1.00, "", ""),
-    ("182305", 4.00, 1.40, 1.00, "PASTEL", "DRIP"),
-    ("182728", 1.10, 1.20, 1.00, "", ""),
-    ("182222", 2.60, 1.80, 1.00, "BUILT FOR", "PLAYTIME"),
-    ("182214", 3.00, 0.90, 1.00, "", ""),
-    ("182135", 1.80, 1.70, 1.00, "KIDS KITS", "DM TO ORDER"),
+    ("182739", 0.20, 1.30, 0.50),  # girl laughing, France 10 - hook
+    ("182440", 0.15, 0.85, 0.50),  # Barça kid flying jump
+    ("182420", 0.30, 1.40, 0.80),  # Lamine Yamal 10 back print
+    ("182427", 0.20, 1.10, 0.60),  # Yamal 10 playing with friends
+    ("182700", 0.70, 1.20, 0.60),  # Barça home kit smile
+    ("182649", 0.00, 1.40, 0.90),  # Portugal crest close-up
+    ("182601", 0.10, 0.80, 0.80),  # ZAHRA 02 back print
+    ("182436", 0.60, 0.90, 0.80),  # ZAHRA 02 walking away
+    ("182412", 0.40, 1.60, 0.80),  # Germany away kit
+    ("182903", 0.00, 0.90, 0.90),  # Germany crest detail
+    ("182305", 4.00, 1.30, 0.50),  # pastel kit fabric close-up
+    ("182728", 1.10, 1.10, 0.50),  # pink bow + 02
+    ("182222", 2.60, 1.60, 0.60),  # Barça kid sprinting at camera
+    ("182214", 3.00, 0.90, 0.80),  # girl in blue 10
+    ("182135", 1.80, 1.70, 0.50),  # toddler in Germany kit turns to camera
 ]
-END_HOLD = 1.6  # freeze on the last frame under the CTA
-HANDLE = "@thegoatedjerseys"
 
-
-def text_filters(tmp, i, head, sub, dur, last):
-    if not head:
-        return ""
-    fade = "alpha='min(1,t/0.12)'"
-    out = []
-    for j, (txt, font, size, y) in enumerate(
-        [(head, FONT, 118, "h*0.66"), (sub, FONT_SUB, 72, "h*0.66+135")]
-    ):
-        if not txt:
-            continue
-        p = os.path.join(tmp, f"t{i}_{j}.txt")
-        with open(p, "w") as f:
-            f.write(txt)
-        out.append(
-            f"drawtext=fontfile={font}:textfile={p}:fontsize={size}:fontcolor=white:"
-            f"borderw=6:bordercolor=black@0.85:shadowx=0:shadowy=6:shadowcolor=black@0.5:"
-            f"x=(w-text_w)/2:y={y}:{fade}"
-        )
-    if last:
-        p = os.path.join(tmp, "handle.txt")
-        with open(p, "w") as f:
-            f.write(HANDLE)
-        out.append(
-            f"drawbox=x=(iw-760)/2:y=ih*0.66+250:w=760:h=110:color=white@0.95:t=fill:"
-            f"enable='gte(t,0.25)',"
-            f"drawtext=fontfile={FONT_SUB}:textfile={p}:fontsize=64:fontcolor=black:"
-            f"x=(w-text_w)/2:y=h*0.66+250+(110-text_h)/2-6:enable='gte(t,0.25)'"
-        )
-    return "," + ",".join(out)
+# Warm, matte "summer haze": warmer white balance, lifted blacks, soft highlight roll-off.
+GRADE = (
+    "colortemperature=temperature=5600:mix=0.6,"
+    "colorbalance=rs=0.03:bs=-0.02:rh=0.05:gh=0.02:bh=-0.05,"
+    "curves=all='0/0.06 0.25/0.26 0.5/0.52 0.75/0.77 1/0.95',"
+    "eq=contrast=0.97:saturation=0.95:gamma=1.02"
+)
 
 
 def main():
     raw, out = sys.argv[1], sys.argv[2]
-    clean = "--clean" in sys.argv
     tmp = tempfile.mkdtemp()
-    # Render each segment separately (decoding 15 4K streams at once runs out of memory),
-    # then join them with the concat demuxer.
+    # Render each shot separately (decoding 15 4K streams at once runs out of memory),
+    # then join with hard cuts via the concat demuxer.
     segs = []
-    for i, (clip, ss, dur, speed, head, sub) in enumerate(EDL):
-        last = i == len(EDL) - 1
+    for i, (clip, ss, dur, speed) in enumerate(EDL):
         outdur = dur / speed
+        last = i == len(EDL) - 1
         v = (
-            f"setpts=(PTS-STARTPTS)/{speed},fps={FPS},"
-            f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,"
-            f"eq=contrast=1.06:saturation=1.18"
+            f"trim=0:{dur},setpts=(PTS-STARTPTS)/{speed},fps={FPS},"
+            f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,{GRADE}"
         )
+        # Park sound plays at real speed under the slow-mo so it never sounds warped.
+        a = f"asetpts=PTS-STARTPTS,aresample=48000,apad,atrim=0:{outdur:.3f},volume=0.8"
+        a += f",afade=t=in:d=0.03,afade=t=out:st={outdur - 0.03:.3f}:d=0.03"
+        if i == 0:
+            v += ",fade=t=in:d=0.4"
         if last:
-            v += f",tpad=stop_mode=clone:stop_duration={END_HOLD}"
-            outdur += END_HOLD
-        if not clean:
-            v += text_filters(tmp, i, head, sub, outdur, last)
-        a = "asetpts=PTS-STARTPTS,aresample=48000"
-        if speed != 1:
-            a += f",atempo={speed}"
-        a += f",apad,atrim=0:{outdur:.3f},volume=0.6"
+            v += f",fade=t=out:st={outdur - 0.6:.3f}:d=0.6"
+            a += f",afade=t=out:st={outdur - 0.6:.3f}:d=0.6"
         seg = os.path.join(tmp, f"seg{i:02d}.mp4")
         subprocess.run([
-            "ffmpeg", "-y", "-v", "error", "-ss", f"{ss}", "-t", f"{dur}",
+            "ffmpeg", "-y", "-v", "error", "-ss", f"{ss}", "-t", f"{max(dur, outdur):.3f}",
             "-i", os.path.join(raw, f"20260920_{clip}.mp4"),
             "-vf", v, "-af", a, "-t", f"{outdur:.3f}",
             "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-profile:v", "high",
